@@ -1,0 +1,335 @@
+import os, zipfile
+
+base_dir = "/mnt/data/first-year-playbook-multipage"
+assets_dir = os.path.join(base_dir, "assets")
+os.makedirs(assets_dir, exist_ok=True)
+
+style_css = """
+:root { color-scheme: dark; }
+html { scroll-behavior: smooth; }
+.bg-grid { background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.10) 1px, transparent 0); background-size: 26px 26px; }
+.noise::before { content: ""; position: absolute; inset: 0; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/></filter><rect width="240" height="240" filter="url(%23n)" opacity=".12"/></svg>'); opacity: .18; pointer-events: none; mix-blend-mode: overlay; }
+.glow { filter: blur(52px); opacity: .55; transform: translateZ(0); }
+.glass { background: linear-gradient(180deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.06) 100%); border: 1px solid rgba(255,255,255,.10); box-shadow: 0 10px 30px rgba(0,0,0,.25); backdrop-filter: blur(10px); }
+.panel { background: rgba(2, 6, 23, .35); border: 1px solid rgba(255,255,255,.10); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+""".strip() + "\n"
+with open(os.path.join(assets_dir, "style.css"), "w", encoding="utf-8") as f:
+    f.write(style_css)
+
+common_head = """<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <meta name="description" content="{desc}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {{
+      theme: {{
+        extend: {{
+          fontFamily: {{ sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI'] }},
+          boxShadow: {{ soft: '0 10px 30px rgba(0,0,0,.25)' }}
+        }}
+      }}
+    }}
+  </script>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+"""
+
+background_block = """  <!-- Background -->
+  <div class="fixed inset-0 -z-10">
+    <div class="absolute inset-0 bg-gradient-to-b from-indigo-700/20 via-slate-950 to-slate-950"></div>
+    <div class="absolute inset-0 bg-grid opacity-60"></div>
+    <div class="absolute inset-0 noise"></div>
+    <div class="absolute -top-24 -left-32 w-[520px] h-[520px] rounded-full bg-indigo-500 glow"></div>
+    <div class="absolute top-40 -right-40 w-[620px] h-[620px] rounded-full bg-fuchsia-500 glow"></div>
+  </div>
+"""
+
+def header(active=""):
+    def nav(label, href, key):
+        cls = "text-white font-semibold" if active == key else "text-slate-200 hover:text-white"
+        return f'<a class="{cls}" href="{href}">{label}</a>'
+    return f"""  <header class="sticky top-0 z-50 border-b border-white/10 bg-slate-950/65 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+
+      <a href="index.html" class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center">
+          <span class="text-lg" aria-hidden="true">📘</span>
+        </div>
+        <div class="leading-tight">
+          <div class="font-extrabold">First Year Playbook</div>
+          <div class="text-xs text-slate-300">Định hướng học tập & thích nghi cho năm nhất</div>
+        </div>
+      </a>
+
+      <nav class="hidden md:flex items-center gap-6 text-sm">
+        {nav("Giới thiệu","about.html","about")}
+        {nav("Vấn đề","problem.html","problem")}
+        {nav("Giải pháp","solution.html","solution")}
+        {nav("Cấu trúc","structure.html","structure")}
+        {nav("Modules","modules.html","modules")}
+        {nav("FAQ","faq.html","faq")}
+      </nav>
+
+      <a href="modules.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white text-slate-950 font-semibold shadow-soft hover:opacity-90 transition">
+        Bắt đầu <span aria-hidden="true">→</span>
+      </a>
+
+    </div>
+  </header>
+"""
+
+footer = """  <footer class="border-t border-white/10">
+    <div class="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+      <div>
+        <div class="font-extrabold">First Year Playbook</div>
+        <div class="text-sm text-slate-300 mt-1">Multi-page starter • Dark academic style</div>
+      </div>
+      <div class="text-sm text-slate-300">© 2026</div>
+    </div>
+  </footer>
+"""
+
+def page(title, h1, subtitle, active, cards=None):
+    cards_html = ""
+    if cards:
+        pieces = []
+        for label, href, desc in cards:
+            pieces.append(f'''  <a href="{href}" class="glass rounded-3xl p-6 hover:bg-white/10 transition">
+      <div class="flex items-center justify-between">
+        <div class="font-extrabold">{label}</div>
+        <span class="text-slate-300">→</span>
+      </div>
+      <div class="mt-2 text-sm text-slate-200/90">{desc}</div>
+    </a>''')
+        cards_html = '<div class="mt-8 grid md:grid-cols-2 gap-6">\n' + "\n".join(pieces) + "\n</div>"
+
+    return (common_head.format(title=title, desc=subtitle) + f"""
+<body class="bg-slate-950 text-slate-100 font-sans">
+{background_block}
+{header(active)}
+  <main class="max-w-6xl mx-auto px-4 pt-14 pb-16">
+    <div class="glass rounded-3xl p-8">
+      <p class="text-xs text-slate-300">Headings only • (bạn đổ nội dung chi tiết sau)</p>
+      <h1 class="mt-2 text-3xl md:text-4xl font-black tracking-tight">{h1}</h1>
+      <p class="mt-3 text-slate-200/90">{subtitle}</p>
+
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="index.html" class="px-5 py-3 rounded-2xl border border-white/15 bg-white/5 text-white font-semibold hover:bg-white/10 transition">← Trang chủ</a>
+        <a href="modules.html" class="px-5 py-3 rounded-2xl bg-white text-slate-950 font-bold shadow-soft hover:opacity-90 transition">Xem Modules</a>
+      </div>
+      {cards_html}
+    </div>
+  </main>
+{footer}
+</body>
+</html>
+""").strip() + "\n")
+
+# index.html
+index_html = (common_head.format(title="First Year Playbook", desc="Multi-page hub for first-year students.") + f"""
+<body class="bg-slate-950 text-slate-100 font-sans">
+{background_block}
+{header("")}
+  <section class="max-w-6xl mx-auto px-4 pt-16 pb-14">
+    <div class="grid lg:grid-cols-2 gap-10 items-start">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-xs text-slate-200">
+          <span aria-hidden="true">🎓</span>
+          <span>Dành cho SV năm nhất (những tuần đầu đại học)</span>
+        </div>
+
+        <h1 class="mt-5 text-4xl md:text-5xl font-black tracking-tight leading-tight">
+          First Year Playbook
+          <span class="block text-slate-200 font-extrabold mt-2">Website học thuật — bản đồ học tập cho năm nhất</span>
+        </h1>
+
+        <p class="mt-5 text-slate-200/90 text-lg leading-relaxed">
+          Đây là bản mẫu <span class="text-white font-semibold">multi-page</span>: mỗi mục dẫn sang <span class="text-white font-semibold">một trang riêng</span>.
+        </p>
+
+        <div class="mt-7 flex flex-wrap gap-3">
+          <a href="structure.html" class="px-5 py-3 rounded-2xl bg-white text-slate-950 font-bold shadow-soft hover:opacity-90 transition">Xem cấu trúc</a>
+          <a href="modules.html" class="px-5 py-3 rounded-2xl border border-white/15 bg-white/5 text-white font-semibold hover:bg-white/10 transition">Xem 5 modules</a>
+        </div>
+
+        <div class="mt-8 grid grid-cols-3 gap-3">
+          <a href="deliverables.html" class="rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
+            <div class="text-2xl font-extrabold">PDF</div>
+            <div class="text-xs text-slate-300 mt-1">(placeholder)</div>
+          </a>
+          <a href="deliverables.html" class="rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
+            <div class="text-2xl font-extrabold">Video</div>
+            <div class="text-xs text-slate-300 mt-1">(placeholder)</div>
+          </a>
+          <a href="faq.html" class="rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
+            <div class="text-2xl font-extrabold">FAQ</div>
+            <div class="text-xs text-slate-300 mt-1">(placeholder)</div>
+          </a>
+        </div>
+      </div>
+
+      <div class="lg:pl-8">
+        <div class="glass rounded-3xl overflow-hidden">
+          <div class="p-6 md:p-8">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="text-sm text-slate-200">Thông điệp cốt lõi</div>
+                <div class="mt-2 text-2xl md:text-3xl font-black leading-snug">
+                  “Học đại học không khó.
+                  <span class="block text-slate-200">Khó là không biết luật chơi.”</span>
+                </div>
+              </div>
+              <div class="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center">✨</div>
+            </div>
+
+            <div class="mt-6 grid gap-3">
+              <div class="panel rounded-2xl p-4">
+                <div class="font-semibold">Pages</div>
+                <div class="text-sm text-slate-200 mt-1">About • Problem • Solution • Structure</div>
+              </div>
+              <div class="panel rounded-2xl p-4">
+                <div class="font-semibold">Modules</div>
+                <div class="text-sm text-slate-200 mt-1">Module 1–5 (click → detail)</div>
+              </div>
+              <div class="panel rounded-2xl p-4">
+                <div class="font-semibold">Q&A</div>
+                <div class="text-sm text-slate-200 mt-1">FAQ + Ask a question (placeholder)</div>
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-wrap gap-2 text-xs text-slate-300">
+              <span class="px-3 py-1.5 rounded-full border border-white/10 bg-white/5">✔ Multi-page</span>
+              <span class="px-3 py-1.5 rounded-full border border-white/10 bg-white/5">✔ Dễ nhìn</span>
+              <span class="px-3 py-1.5 rounded-full border border-white/10 bg-white/5">✔ Phù hợp SV & giảng viên</span>
+            </div>
+          </div>
+
+          <div class="border-t border-white/10 p-5 bg-slate-950/30 flex items-center justify-between">
+            <div class="text-sm text-slate-200">Trạng thái</div>
+            <div class="text-sm font-semibold text-white">Headings only</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-4 pb-16">
+    <h2 class="text-2xl md:text-3xl font-black">Chuyên mục chính</h2>
+    <p class="mt-2 text-slate-200/90">Click để đi sang từng trang.</p>
+
+    <div class="mt-8 grid md:grid-cols-2 gap-6">
+      <a href="about.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="flex items-center justify-between"><div class="font-extrabold">About the Website</div><span class="text-slate-300">→</span></div></a>
+      <a href="problem.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="flex items-center justify-between"><div class="font-extrabold">Problem</div><span class="text-slate-300">→</span></div></a>
+      <a href="solution.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="flex items-center justify-between"><div class="font-extrabold">Solution & Purpose</div><span class="text-slate-300">→</span></div></a>
+      <a href="structure.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="flex items-center justify-between"><div class="font-extrabold">Website Structure</div><span class="text-slate-300">→</span></div></a>
+      <a href="modules.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition md:col-span-2"><div class="flex items-center justify-between"><div class="font-extrabold">Modules (1–5)</div><span class="text-slate-300">→</span></div></a>
+      <a href="faq.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition md:col-span-2"><div class="flex items-center justify-between"><div class="font-extrabold">Quick Help & FAQ</div><span class="text-slate-300">→</span></div></a>
+    </div>
+  </section>
+{footer}
+</body>
+</html>
+""").strip() + "\n")
+
+with open(os.path.join(base_dir, "index.html"), "w", encoding="utf-8") as f:
+    f.write(index_html)
+
+# Write pages
+pages_to_make = [
+    ("about.html", page("First Year Playbook — About", "About the Website", "Giới thiệu dự án và điểm khác biệt (placeholder).", "about",
+                        cards=[("Problem","problem.html","Bối cảnh & khó khăn của sinh viên."),("Solution & Purpose","solution.html","Mục tiêu và cách website giải quyết.")])),
+
+    ("problem.html", page("First Year Playbook — Problem", "Problem", "Vấn đề và bối cảnh cần giải quyết (placeholder).", "problem",
+                          cards=[("Solution & Purpose","solution.html","Đi tới giải pháp."),("FAQ","faq.html","Xem khu giải đáp nhanh.")])),
+
+    ("solution.html", page("First Year Playbook — Solution", "Solution & Purpose", "Giải pháp & mục tiêu website (placeholder).", "solution",
+                           cards=[("Website Structure","structure.html","Xem cấu trúc nội dung."),("Deliverables","deliverables.html","Sản phẩm: PDF, Video, Quiz/FAQ.")])),
+
+    ("structure.html", page("First Year Playbook — Structure", "Website Structure", "Cấu trúc website như sổ tay sinh viên số (placeholder).", "structure",
+                            cards=[("Main Content Sections","sections.html","Các chuyên mục nội dung chính."),("Modules","modules.html","Danh sách 5 modules.")])),
+
+    ("sections.html", page("First Year Playbook — Sections", "Main Content Sections", "Các chuyên mục chính (placeholder).", "structure",
+                           cards=[("Study Tips & Learning Experience","study-tips.html","Kinh nghiệm & mẹo học tập."),
+                                  ("Academic Guidelines","guidelines.html","Hướng dẫn học vụ."),
+                                  ("Quick Help & FAQ","faq.html","Giải đáp nhanh cho sinh viên.")])),
+
+    ("deliverables.html", page("First Year Playbook — Deliverables", "Deliverables", "PDF • Video • Quiz/FAQ (placeholder).", "solution",
+                               cards=[("Modules","modules.html","Đi tới 5 modules."),("FAQ","faq.html","Đi tới FAQ.")])),
+
+    ("study-tips.html", page("First Year Playbook — Study Tips", "Study Tips & Learning Experience", "Kinh nghiệm & mẹo học tập (placeholder).", "structure")),
+    ("guidelines.html", page("First Year Playbook — Academic Guidelines", "Academic Guidelines", "Hướng dẫn học vụ (placeholder).", "structure")),
+    ("faq.html", page("First Year Playbook — FAQ", "Quick Help & FAQ", "Giải đáp nhanh & hỏi đáp (placeholder).", "faq")),
+]
+
+for filename, content in pages_to_make:
+    with open(os.path.join(base_dir, filename), "w", encoding="utf-8") as f:
+        f.write(content)
+
+# modules.html
+modules_html = (common_head.format(title="First Year Playbook — Modules", desc="5 Modules") + f"""
+<body class="bg-slate-950 text-slate-100 font-sans">
+{background_block}
+{header("modules")}
+  <main class="max-w-6xl mx-auto px-4 pt-14 pb-16">
+    <div class="glass rounded-3xl p-8">
+      <p class="text-xs text-slate-300">Headings only • (bạn đổ nội dung chi tiết sau)</p>
+      <h1 class="mt-2 text-3xl md:text-4xl font-black tracking-tight">5 Modules</h1>
+      <p class="mt-3 text-slate-200/90">Chọn module để vào trang riêng.</p>
+
+      <div class="mt-8 grid md:grid-cols-2 gap-6">
+        <a href="module-1.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="font-extrabold">Module 1</div><div class="text-sm text-slate-200 mt-1">From High School to University</div></a>
+        <a href="module-2.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="font-extrabold">Module 2</div><div class="text-sm text-slate-200 mt-1">How Lecturers Grade Your Work</div></a>
+        <a href="module-3.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="font-extrabold">Module 3</div><div class="text-sm text-slate-200 mt-1">How to Avoid Academic Mistakes</div></a>
+        <a href="module-4.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition"><div class="font-extrabold">Module 4</div><div class="text-sm text-slate-200 mt-1">Using AI as a Learning Assistant (Not a Shortcut)</div></a>
+        <a href="module-5.html" class="glass rounded-3xl p-6 hover:bg-white/10 transition md:col-span-2"><div class="font-extrabold">Module 5</div><div class="text-sm text-slate-200 mt-1">Survival Tips from Seniors</div></a>
+      </div>
+
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="index.html" class="px-5 py-3 rounded-2xl border border-white/15 bg-white/5 text-white font-semibold hover:bg-white/10 transition">← Trang chủ</a>
+        <a href="faq.html" class="px-5 py-3 rounded-2xl bg-white text-slate-950 font-bold shadow-soft hover:opacity-90 transition">Đi tới FAQ</a>
+      </div>
+    </div>
+  </main>
+{footer}
+</body>
+</html>
+""").strip() + "\n"
+with open(os.path.join(base_dir, "modules.html"), "w", encoding="utf-8") as f:
+    f.write(modules_html)
+
+# module detail pages
+module_titles = [
+    ("module-1.html","Module 1 — From High School to University","From High School to University"),
+    ("module-2.html","Module 2 — How Lecturers Grade Your Work","How Lecturers Grade Your Work"),
+    ("module-3.html","Module 3 — How to Avoid Academic Mistakes","How to Avoid Academic Mistakes"),
+    ("module-4.html","Module 4 — Using AI as a Learning Assistant","Using AI as a Learning Assistant (Not a Shortcut)"),
+    ("module-5.html","Module 5 — Survival Tips from Seniors","Survival Tips from Seniors"),
+]
+for fn, h1, sub in module_titles:
+    with open(os.path.join(base_dir, fn), "w", encoding="utf-8") as f:
+        f.write(page(f"First Year Playbook — {h1}", h1, f"{sub} (placeholder).", "modules",
+                     cards=[("Back to Modules","modules.html","Quay về danh sách modules."),("FAQ","faq.html","Câu hỏi thường gặp.")]))
+
+# README
+with open(os.path.join(base_dir, "README.txt"), "w", encoding="utf-8") as f:
+    f.write("Upload tất cả file lên GitHub repo (giữ index.html ở root) → Settings → Pages → main / root.\n")
+
+# zip
+zip_path = "/mnt/data/first-year-playbook-multipage.zip"
+with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+    for root, dirs, files in os.walk(base_dir):
+        for file in files:
+            full = os.path.join(root, file)
+            rel = os.path.relpath(full, base_dir)
+            z.write(full, arcname=rel)
+
+zip_path
